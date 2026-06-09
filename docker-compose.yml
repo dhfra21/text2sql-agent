@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    build: ./db
     restart: unless-stopped
     environment:
       POSTGRES_DB: text2sql_dev
@@ -8,8 +8,6 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
-      - ./db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
     ports:
       - "5432:5432"
     healthcheck:
