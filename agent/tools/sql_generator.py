@@ -1,7 +1,9 @@
 import os
+import certifi
 from dotenv import load_dotenv
 
 load_dotenv()
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
 _PROMPT_TEMPLATE = """You are a SQL expert. Given the database schema below, write a single SQL SELECT query that answers the user's question.
 
