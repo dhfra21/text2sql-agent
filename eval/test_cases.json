@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "question": "How many customers are there?",
+    "expected_sql_pattern": "COUNT",
+    "notes": "Simple aggregate"
+  },
+  {
+    "id": 2,
+    "question": "Which products cost more than 100 euros?",
+    "expected_sql_pattern": "price > 100",
+    "notes": "Filtered SELECT"
+  },
+  {
+    "id": 3,
+    "question": "What are the total sales per customer?",
+    "expected_sql_pattern": "GROUP BY",
+    "notes": "Aggregate with GROUP BY"
+  },
+  {
+    "id": 4,
+    "question": "List all completed orders sorted by date descending.",
+    "expected_sql_pattern": "ORDER BY",
+    "notes": "Filter + sort"
+  },
+  {
+    "id": 5,
+    "question": "Which customer placed the most orders?",
+    "expected_sql_pattern": "COUNT",
+    "notes": "Aggregate with ORDER BY + LIMIT"
+  },
+  {
+    "id": 6,
+    "question": "What is the average order total?",
+    "expected_sql_pattern": "AVG",
+    "notes": "Simple aggregate"
+  },
+  {
+    "id": 7,
+    "question": "Show me all products in the Electronics category.",
+    "expected_sql_pattern": "category",
+    "notes": "Simple filter"
+  },
+  {
+    "id": 8,
+    "question": "How many items were sold per product?",
+    "expected_sql_pattern": "order_items",
+    "notes": "JOIN + GROUP BY"
+  },
+  {
+    "id": 9,
+    "question": "What is the total revenue from completed orders?",
+    "expected_sql_pattern": "SUM",
+    "notes": "Aggregate with filter"
+  },
+  {
+    "id": 10,
+    "question": "Which countries do our customers come from?",
+    "expected_sql_pattern": "DISTINCT",
+    "notes": "DISTINCT select"
+  }
+]
