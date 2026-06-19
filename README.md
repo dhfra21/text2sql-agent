@@ -127,6 +127,98 @@ pytest tests/ -v
 
 ---
 
+## Evaluation
+
+### Custom benchmark (no download required)
+
+Runs 10 hand-written questions against the local PostgreSQL demo database and measures **Execution Accuracy (EX)** — whether the agent's result set matches the gold result set.
+
+```bash
+python eval/benchmark.py
+```
+
+Expected output:
+```
+  [PASS] Q01  How many customers are there?
+  [PASS] Q02  Which products cost more than 100 euros?
+  ...
+  Strict EX (exact columns):  10/10 = 100.0%
+  Lax EX   (correct values):  10/10 = 100.0%
+```
+
+### BIRD benchmark (real-world evaluation)
+
+Evaluates the agent against the [BIRD](https://bird-bench.github.io/) benchmark — 1 534 business-domain questions across 11 SQLite databases.
+
+**Step 1 — Download BIRD dev set**
+
+Go to [bird-bench.github.io](https://bird-bench.github.io/) → Download → `dev.zip` (~400 MB).
+Extract so the layout is:
+
+```
+dev_20240627/
+  dev.json
+  dev_databases/
+    dev_databases/
+      california_schools/
+        california_schools.sqlite
+      card_games/
+      ...
+```
+
+**Step 2 — Run**
+
+```bash
+# 50 random questions across all 11 databases (recommended first run)
+python eval/bird_benchmark.py --bird-path ../dev_20240627
+
+# Restrict to one database
+python eval/bird_benchmark.py --bird-path ../dev_20240627 --db california_schools --n 50
+
+# Filter by difficulty
+python eval/bird_benchmark.py --bird-path ../dev_20240627 --difficulty simple --n 30
+
+# Save full results to JSON
+python eval/bird_benchmark.py --bird-path ../dev_20240627 --n 50 --output eval/bird_results.json
+```
+
+**Options**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--bird-path` | required | Path to the extracted BIRD dev directory |
+| `--n` | 50 | Number of questions to evaluate |
+| `--db` | all | Restrict to one database ID |
+| `--difficulty` | all | `simple`, `moderate`, or `challenging` |
+| `--seed` | 42 | Random seed for reproducible sampling |
+| `--delay` | 3 | Seconds between Groq API calls (free-tier rate limit) |
+| `--output` | none | Save detailed results to a JSON file |
+
+**Expected output**
+
+```
+BIRD Evaluation — 50 questions
+  [PASS] Q0061 [california_schools] [simple     ] How many chartered schools ...
+  [FAIL] Q0065 [california_schools] [moderate   ] What is the ratio in percentage ...
+         agent : SELECT COUNT(...) ...
+         gold  : SELECT CAST(SUM(...)) ...
+  ...
+  ------------------------------------------------------------------------
+  Execution Accuracy (EX) : 28/50 = 56.0%
+  Target (Week 5-6)       : 60.0%
+
+  By difficulty:
+    simple      :  18/25  = 72.0%
+    moderate    :   8/18  = 44.4%
+    challenging :   2/7   = 28.6%
+```
+
+**How EX is measured**
+
+Result sets are compared as **deduplicated, order-independent sets** — matching the official BIRD metric. A question scores 1 if the agent's unique result values exactly match the gold SQL's unique result values, 0 otherwise.
+
+---
+
 ## Milestones
 
 | Weeks | Milestone |
