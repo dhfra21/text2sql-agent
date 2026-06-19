@@ -2,61 +2,61 @@
   {
     "id": 1,
     "question": "How many customers are there?",
-    "expected_sql_pattern": "COUNT",
+    "gold_sql": "SELECT COUNT(*) FROM customers",
     "notes": "Simple aggregate"
   },
   {
     "id": 2,
     "question": "Which products cost more than 100 euros?",
-    "expected_sql_pattern": "price > 100",
-    "notes": "Filtered SELECT"
+    "gold_sql": "SELECT id, name, category, price, stock FROM products WHERE price > 100 ORDER BY id",
+    "notes": "Filtered SELECT — agent should return all product columns"
   },
   {
     "id": 3,
     "question": "What are the total sales per customer?",
-    "expected_sql_pattern": "GROUP BY",
-    "notes": "Aggregate with GROUP BY"
+    "gold_sql": "SELECT c.name, SUM(oi.quantity * oi.unit_price) AS total_sales FROM customers c JOIN orders o ON c.id = o.customer_id JOIN order_items oi ON o.id = oi.order_id GROUP BY c.name ORDER BY c.name",
+    "notes": "Aggregate via order_items — more accurate than orders.total"
   },
   {
     "id": 4,
     "question": "List all completed orders sorted by date descending.",
-    "expected_sql_pattern": "ORDER BY",
-    "notes": "Filter + sort"
+    "gold_sql": "SELECT id, customer_id, order_date, status, total FROM orders WHERE status = 'completed' ORDER BY order_date DESC",
+    "notes": "Filter + sort — agent should return all order columns"
   },
   {
     "id": 5,
     "question": "Which customer placed the most orders?",
-    "expected_sql_pattern": "COUNT",
-    "notes": "Aggregate with ORDER BY + LIMIT"
+    "gold_sql": "SELECT c.name FROM customers c JOIN orders o ON c.id = o.customer_id GROUP BY c.name ORDER BY COUNT(o.id) DESC LIMIT 1",
+    "notes": "The answer is the customer name — count column is not required"
   },
   {
     "id": 6,
     "question": "What is the average order total?",
-    "expected_sql_pattern": "AVG",
+    "gold_sql": "SELECT AVG(total) FROM orders",
     "notes": "Simple aggregate"
   },
   {
     "id": 7,
     "question": "Show me all products in the Electronics category.",
-    "expected_sql_pattern": "category",
-    "notes": "Simple filter"
+    "gold_sql": "SELECT id, name, category, price, stock FROM products WHERE category = 'Electronics' ORDER BY id",
+    "notes": "Simple filter — agent should return all product columns"
   },
   {
     "id": 8,
     "question": "How many items were sold per product?",
-    "expected_sql_pattern": "order_items",
+    "gold_sql": "SELECT p.name, SUM(oi.quantity) AS total_sold FROM products p JOIN order_items oi ON p.id = oi.product_id GROUP BY p.name ORDER BY p.name",
     "notes": "JOIN + GROUP BY"
   },
   {
     "id": 9,
     "question": "What is the total revenue from completed orders?",
-    "expected_sql_pattern": "SUM",
+    "gold_sql": "SELECT SUM(total) AS total_revenue FROM orders WHERE status = 'completed'",
     "notes": "Aggregate with filter"
   },
   {
     "id": 10,
     "question": "Which countries do our customers come from?",
-    "expected_sql_pattern": "DISTINCT",
+    "gold_sql": "SELECT DISTINCT country FROM customers ORDER BY country",
     "notes": "DISTINCT select"
   }
 ]

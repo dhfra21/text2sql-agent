@@ -31,3 +31,10 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# ADK runtime files
+agent/.adk/
+
+# BIRD dataset (large, not tracked)
+dev_*/
+*.zip

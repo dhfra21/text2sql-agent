@@ -38,16 +38,15 @@ def validate_sql(sql: str) -> dict:
     if "--" in sql or "/*" in sql or "*/" in sql:
         return {"valid": False, "reason": "SQL comment detected — possible injection attempt"}
 
-    # Block multiple statements (semicolon not at the very end)
-    stripped = sql.strip().rstrip(";")
-    if ";" in stripped:
-        return {"valid": False, "reason": "Multiple statements detected — only single SELECT allowed"}
-
+    # Use sqlparse to detect actual multiple statements.
+    # A naive ";" in string search causes false positives on semicolons inside string
+    # literals (e.g. WHERE status = 'pre;payment'). sqlparse parses correctly.
     parsed = sqlparse.parse(sql)
     if not parsed or not parsed[0].tokens:
         return {"valid": False, "reason": "Could not parse SQL"}
 
-    if len(parsed) > 1:
+    non_empty = [s for s in parsed if str(s).strip().rstrip(";")]
+    if len(non_empty) > 1:
         return {"valid": False, "reason": "Multiple statements detected — only single SELECT allowed"}
 
     statement = parsed[0]

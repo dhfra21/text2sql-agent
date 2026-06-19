@@ -19,7 +19,7 @@ INSERT INTO orders (customer_id, order_date, status, total) VALUES
     (2, '2026-05-03', 'completed',   49.99),
     (3, '2026-05-10', 'shipped',    499.00),
     (1, '2026-06-01', 'pending',    349.00),
-    (4, '2026-06-05', 'completed',  379.98);
+    (4, '2026-06-05', 'completed',  508.96);  -- 2×29.99 + 2×49.99 + 1×349.00
 
 INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES
     (1, 1, 1, 1299.99),
