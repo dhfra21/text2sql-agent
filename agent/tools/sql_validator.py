@@ -1,12 +1,17 @@
-import re
 import sqlparse
 from sqlparse.sql import Statement
-from sqlparse.tokens import Keyword, DDL, DML
-
+from sqlparse.tokens import DDL, DML, Keyword
 
 _BLOCKED_KEYWORDS = {
-    "DROP", "DELETE", "UPDATE", "INSERT", "ALTER",
-    "TRUNCATE", "CREATE", "EXEC", "EXECUTE",
+    "DROP",
+    "DELETE",
+    "UPDATE",
+    "INSERT",
+    "ALTER",
+    "TRUNCATE",
+    "CREATE",
+    "EXEC",
+    "EXECUTE",
 }
 
 
@@ -22,7 +27,7 @@ def _contains_blocked_keyword(statement: Statement) -> str | None:
 def validate_sql(sql: str) -> dict:
     """Check whether a SQL string is safe to execute.
 
-    Blocks any statement that is not a pure SELECT: DDL, DML mutations,
+    Blocks any statement that is not a pure SELECT (or WITH ... SELECT): DDL, DML mutations,
     multi-statement inputs, and common SQL-injection patterns.
 
     Args:
@@ -47,7 +52,10 @@ def validate_sql(sql: str) -> dict:
 
     non_empty = [s for s in parsed if str(s).strip().rstrip(";")]
     if len(non_empty) > 1:
-        return {"valid": False, "reason": "Multiple statements detected — only single SELECT allowed"}
+        return {
+            "valid": False,
+            "reason": "Multiple statements detected — only single SELECT allowed",
+        }
 
     statement = parsed[0]
 
@@ -55,12 +63,23 @@ def validate_sql(sql: str) -> dict:
     if blocked:
         return {"valid": False, "reason": f"Blocked keyword detected: {blocked}"}
 
-    # Require the statement to start with SELECT
+    # Require the statement to start with SELECT (or WITH for CTEs — a CTE is still
+    # read-only because every mutating keyword is already blocked above)
     first_meaningful = next(
-        (t for t in statement.flatten() if t.ttype not in (sqlparse.tokens.Whitespace, sqlparse.tokens.Newline, sqlparse.tokens.Comment.Single, sqlparse.tokens.Comment.Multiline)),
+        (
+            t
+            for t in statement.flatten()
+            if t.ttype
+            not in (
+                sqlparse.tokens.Whitespace,
+                sqlparse.tokens.Newline,
+                sqlparse.tokens.Comment.Single,
+                sqlparse.tokens.Comment.Multiline,
+            )
+        ),
         None,
     )
-    if first_meaningful is None or first_meaningful.value.upper() != "SELECT":
+    if first_meaningful is None or first_meaningful.value.upper() not in ("SELECT", "WITH"):
         return {"valid": False, "reason": "Only SELECT statements are allowed"}
 
     return {"valid": True, "reason": "OK"}

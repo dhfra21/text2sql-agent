@@ -9,6 +9,7 @@ For each test case:
 EX = 1 if the agent's result set matches the gold result set, else 0.
 Final score = percentage of cases where EX = 1.
 """
+
 import json
 import sys
 import time
@@ -21,13 +22,13 @@ _INTER_REQUEST_DELAY = 3
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agent.tools.schema_tool import get_schema
-from agent.tools.sql_generator import generate_sql
-from agent.tools.sql_validator import validate_sql
-from agent.tools.query_executor import execute_query
-
+from agent.tools.query_executor import execute_query  # noqa: E402
+from agent.tools.schema_tool import get_schema  # noqa: E402
+from agent.tools.sql_generator import generate_sql  # noqa: E402
+from agent.tools.sql_validator import validate_sql  # noqa: E402
 
 # ── Result-set comparison ─────────────────────────────────────────────────────
+
 
 def _normalize_value(v) -> str:
     """Convert a cell value to a canonical string for comparison.
@@ -90,6 +91,7 @@ def results_match_lax(actual: dict, expected: dict) -> bool:
 
 # ── Per-case runner ───────────────────────────────────────────────────────────
 
+
 def run_case(case: dict, schema: dict) -> dict:
     """Run one test case through the full pipeline and return a result dict."""
     qid = case["id"]
@@ -100,8 +102,10 @@ def run_case(case: dict, schema: dict) -> dict:
     gold_result = execute_query(gold_sql)
     if "error" in gold_result:
         return {
-            "id": qid, "question": question,
-            "status": "gold_error", "detail": gold_result["error"],
+            "id": qid,
+            "question": question,
+            "status": "gold_error",
+            "detail": gold_result["error"],
             "ex": 0,
         }
 
@@ -110,32 +114,47 @@ def run_case(case: dict, schema: dict) -> dict:
 
     if isinstance(agent_sql, dict) and "error" in agent_sql:
         return {
-            "id": qid, "question": question,
-            "status": "generate_error", "detail": agent_sql["error"],
-            "gold_sql": gold_sql, "agent_sql": None, "ex": 0,
+            "id": qid,
+            "question": question,
+            "status": "generate_error",
+            "detail": agent_sql["error"],
+            "gold_sql": gold_sql,
+            "agent_sql": None,
+            "ex": 0,
         }
 
     if agent_sql == "UNANSWERABLE":
         return {
-            "id": qid, "question": question,
+            "id": qid,
+            "question": question,
             "status": "unanswerable",
-            "gold_sql": gold_sql, "agent_sql": agent_sql, "ex": 0,
+            "gold_sql": gold_sql,
+            "agent_sql": agent_sql,
+            "ex": 0,
         }
 
     validation = validate_sql(agent_sql)
     if not validation["valid"]:
         return {
-            "id": qid, "question": question,
-            "status": "invalid_sql", "detail": validation["reason"],
-            "gold_sql": gold_sql, "agent_sql": agent_sql, "ex": 0,
+            "id": qid,
+            "question": question,
+            "status": "invalid_sql",
+            "detail": validation["reason"],
+            "gold_sql": gold_sql,
+            "agent_sql": agent_sql,
+            "ex": 0,
         }
 
     agent_result = execute_query(agent_sql)
     if "error" in agent_result:
         return {
-            "id": qid, "question": question,
-            "status": "execution_error", "detail": agent_result["error"],
-            "gold_sql": gold_sql, "agent_sql": agent_sql, "ex": 0,
+            "id": qid,
+            "question": question,
+            "status": "execution_error",
+            "detail": agent_result["error"],
+            "gold_sql": gold_sql,
+            "agent_sql": agent_sql,
+            "ex": 0,
         }
 
     ex_strict = 1 if results_match(agent_result, gold_result) else 0
@@ -149,7 +168,8 @@ def run_case(case: dict, schema: dict) -> dict:
         status = "mismatch"
 
     return {
-        "id": qid, "question": question,
+        "id": qid,
+        "question": question,
         "status": status,
         "gold_sql": gold_sql,
         "agent_sql": agent_sql,
@@ -162,6 +182,7 @@ def run_case(case: dict, schema: dict) -> dict:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main():
     cases_path = Path(__file__).parent / "test_cases.json"
@@ -211,7 +232,7 @@ def main():
     print(f"\n{sep}")
     print(f"  Strict EX (exact columns):  {ex_strict_total}/{total} = {strict_pct:.1f}%")
     print(f"  Lax EX   (correct values):  {ex_lax_total}/{total} = {lax_pct:.1f}%")
-    print(f"  Target (Week 5-6):          60.0%")
+    print("  Target (Week 5-6):          60.0%")
     print(f"  {'PASS' if strict_pct >= 60 else 'BELOW TARGET'}")
     print(f"{sep}\n")
 

@@ -1,19 +1,21 @@
 """Unit tests for get_schema()."""
+
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
 def mock_engine(monkeypatch):
     """Fixture that replaces the DB engine with a mock returning fake schema rows."""
     fake_rows = [
-        ("customers", "id",         "integer",          "NO"),
-        ("customers", "name",       "character varying","NO"),
-        ("customers", "email",      "character varying","NO"),
-        ("customers", "country",    "character varying","YES"),
-        ("products",  "id",         "integer",          "NO"),
-        ("products",  "name",       "character varying","NO"),
-        ("products",  "price",      "numeric",          "NO"),
+        ("customers", "id", "integer", "NO"),
+        ("customers", "name", "character varying", "NO"),
+        ("customers", "email", "character varying", "NO"),
+        ("customers", "country", "character varying", "YES"),
+        ("products", "id", "integer", "NO"),
+        ("products", "name", "character varying", "NO"),
+        ("products", "price", "numeric", "NO"),
     ]
 
     mock_conn = MagicMock()
@@ -30,6 +32,7 @@ def mock_engine(monkeypatch):
 
 def test_get_schema_returns_all_tables(mock_engine):
     from agent.tools.schema_tool import get_schema
+
     result = get_schema()
     assert "customers" in result
     assert "products" in result
@@ -37,6 +40,7 @@ def test_get_schema_returns_all_tables(mock_engine):
 
 def test_get_schema_column_structure(mock_engine):
     from agent.tools.schema_tool import get_schema
+
     result = get_schema()
     col = result["customers"][0]
     assert "column" in col
@@ -46,6 +50,7 @@ def test_get_schema_column_structure(mock_engine):
 
 def test_get_schema_nullable_flag(mock_engine):
     from agent.tools.schema_tool import get_schema
+
     result = get_schema()
     id_col = next(c for c in result["customers"] if c["column"] == "id")
     country_col = next(c for c in result["customers"] if c["column"] == "country")
@@ -55,6 +60,10 @@ def test_get_schema_nullable_flag(mock_engine):
 
 def test_get_schema_returns_error_on_db_failure(monkeypatch):
     from agent.tools.schema_tool import get_schema
-    monkeypatch.setattr("agent.tools.schema_tool._get_engine", lambda: (_ for _ in ()).throw(Exception("connection refused")))
+
+    monkeypatch.setattr(
+        "agent.tools.schema_tool._get_engine",
+        lambda: (_ for _ in ()).throw(Exception("connection refused")),
+    )
     result = get_schema()
     assert "error" in result

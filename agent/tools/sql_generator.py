@@ -1,12 +1,15 @@
 import os
 import time
+
 import certifi
-from groq import Groq
-from groq import RateLimitError
 from dotenv import load_dotenv
+from groq import Groq, RateLimitError
 
 load_dotenv()
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+
+# Groq model used for SQL generation. Override with GROQ_MODEL in .env.
+_GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 _PROMPT_TEMPLATE = """You are a SQL expert. Given the database schema below, write a single SQL SELECT query that answers the user's question.
 
@@ -30,23 +33,28 @@ def _format_schema(schema: dict) -> str:
     lines = []
     for table, columns in schema.items():
         col_defs = ", ".join(
-            f"{c['column']} {c['type']}{'?' if c['nullable'] else ''}"
-            for c in columns
+            f"{c['column']} {c['type']}{'?' if c['nullable'] else ''}" for c in columns
         )
         lines.append(f"  {table}({col_defs})")
     return "\n".join(lines)
 
 
-def generate_sql(question: str, schema: dict) -> str:
-    """Generate a SQL SELECT statement from a natural language question and a schema dict.
+def generate_sql(question: str, schema: dict | None = None) -> str | dict:
+    """Generate a SQL SELECT statement from a natural language question.
 
-    Uses Groq (llama-3.3-70b-versatile) to translate the question into SQL.
+    Uses Groq (openai/gpt-oss-120b by default, see GROQ_MODEL) to translate the question into SQL.
     Returns a single SQL SELECT statement with no markdown formatting.
     Returns the string "UNANSWERABLE" if the question cannot be answered from the schema.
 
+    The agent should call this with only the question and let the tool retrieve the
+    live database schema itself — passing a large schema dict back through a tool
+    call is error-prone for the model. Callers that target a different database
+    (e.g. the BIRD SQLite benchmark) pass their own schema explicitly.
+
     Args:
         question: The user's natural language question.
-        schema: Schema dict as returned by get_schema().
+        schema: Optional schema dict as returned by get_schema(). If omitted, the
+            live database schema is fetched automatically.
 
     Returns:
         A SQL SELECT string, or "UNANSWERABLE", or {"error": str} on failure.
@@ -55,6 +63,14 @@ def generate_sql(question: str, schema: dict) -> str:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise EnvironmentError("GROQ_API_KEY environment variable is not set")
+
+        if not schema:
+            # Import lazily so the SQLite benchmark path never touches PostgreSQL.
+            from agent.tools.schema_tool import get_schema
+
+            schema = get_schema()
+            if isinstance(schema, dict) and "error" in schema:
+                return {"error": f"Could not load schema: {schema['error']}"}
 
         prompt = _PROMPT_TEMPLATE.format(
             schema=_format_schema(schema),
@@ -66,16 +82,17 @@ def generate_sql(question: str, schema: dict) -> str:
         for attempt in range(max_attempts):
             try:
                 response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model=_GROQ_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0,
+                    reasoning_effort="medium",
                 )
                 break
             except RateLimitError as e:
                 if attempt == max_attempts - 1:
                     raise
                 # Honour the Retry-After header if present, else exponential backoff
-                wait = 10 * (2 ** attempt)  # 10s, 20s, 40s, 80s
+                wait = 10 * (2**attempt)  # 10s, 20s, 40s, 80s
                 try:
                     retry_after = e.response.headers.get("retry-after")
                     if retry_after:

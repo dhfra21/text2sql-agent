@@ -1,7 +1,8 @@
 import os
+
 import sqlalchemy
-from sqlalchemy import text
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -15,18 +16,35 @@ def _get_engine() -> sqlalchemy.engine.Engine:
     user = os.getenv("DB_USER")
     password = os.getenv("DB_PASSWORD")
 
-    missing = [k for k, v in {"DB_HOST": host, "DB_NAME": name, "DB_USER": user, "DB_PASSWORD": password}.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "DB_HOST": host,
+            "DB_NAME": name,
+            "DB_USER": user,
+            "DB_PASSWORD": password,
+        }.items()
+        if not v
+    ]
     if missing:
         raise EnvironmentError(f"Missing required environment variables: {', '.join(missing)}")
 
     url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
-    return sqlalchemy.create_engine(url, execution_options={"isolation_level": "AUTOCOMMIT"})
+    # default_transaction_read_only makes every statement on this connection read-only
+    # at the server level, regardless of the role's privileges — a second safety net
+    # behind validate_sql().
+    return sqlalchemy.create_engine(
+        url,
+        execution_options={"isolation_level": "AUTOCOMMIT"},
+        connect_args={"options": "-c default_transaction_read_only=on"},
+    )
 
 
 def execute_query(sql: str) -> dict:
     """Execute a validated SELECT query and return the result set.
 
-    Connects with a read-only role and enforces a hard row limit of 500.
+    Connects with a read-only session (default_transaction_read_only=on) and
+    enforces a hard row limit of 500.
     Never call this function without first calling validate_sql().
 
     Args:

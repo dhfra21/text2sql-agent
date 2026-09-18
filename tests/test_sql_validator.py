@@ -1,5 +1,5 @@
 """Unit tests for validate_sql()."""
-import pytest
+
 from agent.tools.sql_validator import validate_sql
 
 
@@ -62,3 +62,21 @@ def test_empty_sql():
 def test_non_select_statement():
     result = validate_sql("EXEC xp_cmdshell('dir')")
     assert result["valid"] is False
+
+
+def test_valid_cte_select():
+    result = validate_sql(
+        "WITH big AS (SELECT id FROM orders WHERE total > 100) SELECT COUNT(*) FROM big"
+    )
+    assert result["valid"] is True
+
+
+def test_blocked_cte_with_mutation():
+    result = validate_sql("WITH x AS (DELETE FROM orders RETURNING id) SELECT * FROM x")
+    assert result["valid"] is False
+    assert "DELETE" in result["reason"]
+
+
+def test_semicolon_inside_string_literal_is_allowed():
+    result = validate_sql("SELECT id FROM orders WHERE status = 'pre;payment'")
+    assert result["valid"] is True

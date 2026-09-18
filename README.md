@@ -2,7 +2,7 @@
 
 A conversational AI agent that translates natural language questions into SQL queries, executes them against a PostgreSQL database, and returns plain-English answers.
 
-Built with **Google ADK** and **Gemini 2.0 Flash** as part of the Devoteam Tunisia — Agentic AI internship track (Summer 2026).
+Built with **Google ADK** and **GPT-OSS 120B on Groq** as part of the Devoteam Tunisia — Agentic AI internship track (Summer 2026).
 
 ---
 
@@ -11,7 +11,7 @@ Built with **Google ADK** and **Gemini 2.0 Flash** as part of the Devoteam Tunis
 ```
 User question (natural language)
         ↓
-   ADK Agent  ←  Gemini 2.0 Flash / Llama 3.3
+   ADK Agent  ←  GPT-OSS 120B (Groq)
         ├── get_schema()       → reads DB table/column metadata
         ├── generate_sql()     → builds SQL from schema + question
         ├── validate_sql()     → blocks dangerous statements & injections
@@ -27,7 +27,7 @@ User question (natural language)
 | Layer | Technology |
 |---|---|
 | Agent Framework | Google ADK (Python) |
-| LLM | Gemini 2.0 Flash / Llama 3.3 70B (Groq) |
+| LLM | `openai/gpt-oss-120b` via Groq + LiteLLM (configurable with `GROQ_MODEL`) |
 | Database | PostgreSQL |
 | DB Driver | psycopg2 / SQLAlchemy |
 | Frontend | Streamlit (Weeks 5–6) |
@@ -86,9 +86,9 @@ cp .env.example .env
 Required variables:
 
 ```bash
-# LLM — use one of:
-GOOGLE_API_KEY=...   # Gemini 2.0 Flash (Google AI Studio)
-GROQ_API_KEY=...     # Llama 3.3 70B (free at console.groq.com)
+# LLM
+GROQ_API_KEY=...                  # free at console.groq.com
+GROQ_MODEL=openai/gpt-oss-120b    # optional, this is the default
 
 # PostgreSQL
 DB_HOST=localhost
@@ -123,7 +123,14 @@ adk web agent
 pytest tests/ -v
 ```
 
-18 unit tests covering schema introspection, SQL validation (injection, DDL blocking), and query execution.
+21 unit tests (schema introspection, SQL validation incl. injection/DDL/CTE cases, query execution) plus 7 end-to-end tests (5 tool-chain + 2 full-agent) that run the pipeline and the ADK agent. The e2e tests skip automatically unless `GROQ_API_KEY` is set and the database is reachable.
+
+Lint and format:
+
+```bash
+ruff check .
+black .
+```
 
 ---
 

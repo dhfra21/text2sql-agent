@@ -1,6 +1,8 @@
 """Unit tests for execute_query()."""
+
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -27,6 +29,7 @@ def mock_engine(monkeypatch):
 
 def test_execute_returns_columns_and_rows(mock_engine):
     from agent.tools.query_executor import execute_query
+
     result = execute_query("SELECT id, name, country FROM customers")
     assert result["columns"] == ["id", "name", "country"]
     assert len(result["rows"]) == 2
@@ -35,13 +38,18 @@ def test_execute_returns_columns_and_rows(mock_engine):
 
 def test_execute_returns_error_on_db_failure(monkeypatch):
     from agent.tools.query_executor import execute_query
-    monkeypatch.setattr("agent.tools.query_executor._get_engine", lambda: (_ for _ in ()).throw(Exception("timeout")))
+
+    monkeypatch.setattr(
+        "agent.tools.query_executor._get_engine",
+        lambda: (_ for _ in ()).throw(Exception("timeout")),
+    )
     result = execute_query("SELECT 1")
     assert "error" in result
 
 
 def test_execute_wraps_query_with_limit(mock_engine):
     from agent.tools.query_executor import execute_query
+
     execute_query("SELECT * FROM customers")
     call_args = mock_engine.connect.return_value.execute.call_args
     executed_sql = str(call_args[0][0])

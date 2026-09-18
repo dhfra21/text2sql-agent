@@ -23,6 +23,7 @@ Usage examples:
   # Filter by difficulty, save results
   python eval/bird_benchmark.py --bird-path C:/data/BIRD/dev --n 30 --difficulty simple --output results.json
 """
+
 import argparse
 import json
 import random
@@ -34,14 +35,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agent.tools.sql_generator import generate_sql
-from agent.tools.sql_validator import validate_sql
+from agent.tools.sql_generator import generate_sql  # noqa: E402
+from agent.tools.sql_validator import validate_sql  # noqa: E402
 
 _ROW_LIMIT = 500
 _DEFAULT_DELAY = 3  # seconds between Groq API calls (30 RPM free-tier safety)
 
 
 # ── SQLite helpers ────────────────────────────────────────────────────────────
+
 
 def _db_path(bird_path: Path, db_id: str) -> Path:
     # Standard layout: <bird_path>/dev_databases/<db_id>/<db_id>.sqlite
@@ -108,6 +110,7 @@ def execute_sqlite(db_path: Path, sql: str, trusted: bool = False) -> dict:
 
 # ── EX comparison ─────────────────────────────────────────────────────────────
 
+
 def _norm(v) -> str:
     """Canonical string for a single cell value."""
     if v is None:
@@ -146,6 +149,7 @@ def ex_match(actual: dict, expected: dict) -> bool:
 
 # ── Per-case runner ───────────────────────────────────────────────────────────
 
+
 def run_case(case: dict, bird_path: Path) -> dict:
     """Run a single BIRD question through the agent pipeline and return a result dict."""
     qid = case["question_id"]
@@ -158,17 +162,25 @@ def run_case(case: dict, bird_path: Path) -> dict:
     db = _db_path(bird_path, db_id)
     if not db.exists():
         return {
-            "id": qid, "db_id": db_id, "question": question,
-            "difficulty": difficulty, "status": "db_missing", "ex": 0,
+            "id": qid,
+            "db_id": db_id,
+            "question": question,
+            "difficulty": difficulty,
+            "status": "db_missing",
+            "ex": 0,
         }
 
     # Gold execution (ground truth — run trusted, no validation needed)
     gold_result = execute_sqlite(db, gold_sql, trusted=True)
     if "error" in gold_result:
         return {
-            "id": qid, "db_id": db_id, "question": question,
-            "difficulty": difficulty, "status": "gold_error",
-            "detail": gold_result["error"], "ex": 0,
+            "id": qid,
+            "db_id": db_id,
+            "question": question,
+            "difficulty": difficulty,
+            "status": "gold_error",
+            "detail": gold_result["error"],
+            "ex": 0,
         }
 
     # Schema for this database
@@ -183,25 +195,45 @@ def run_case(case: dict, bird_path: Path) -> dict:
     # Agent pipeline: generate → validate → execute
     agent_sql = generate_sql(augmented, schema)
 
-    base = {"id": qid, "db_id": db_id, "question": question,
-            "difficulty": difficulty, "gold_sql": gold_sql}
+    base = {
+        "id": qid,
+        "db_id": db_id,
+        "question": question,
+        "difficulty": difficulty,
+        "gold_sql": gold_sql,
+    }
 
     if isinstance(agent_sql, dict) and "error" in agent_sql:
-        return {**base, "status": "generate_error",
-                "detail": agent_sql["error"], "agent_sql": None, "ex": 0}
+        return {
+            **base,
+            "status": "generate_error",
+            "detail": agent_sql["error"],
+            "agent_sql": None,
+            "ex": 0,
+        }
 
     if agent_sql == "UNANSWERABLE":
         return {**base, "status": "unanswerable", "agent_sql": agent_sql, "ex": 0}
 
     validation = validate_sql(agent_sql)
     if not validation["valid"]:
-        return {**base, "status": "invalid_sql",
-                "detail": validation["reason"], "agent_sql": agent_sql, "ex": 0}
+        return {
+            **base,
+            "status": "invalid_sql",
+            "detail": validation["reason"],
+            "agent_sql": agent_sql,
+            "ex": 0,
+        }
 
     agent_result = execute_sqlite(db, agent_sql)
     if "error" in agent_result:
-        return {**base, "status": "execution_error",
-                "detail": agent_result["error"], "agent_sql": agent_sql, "ex": 0}
+        return {
+            **base,
+            "status": "execution_error",
+            "detail": agent_result["error"],
+            "agent_sql": agent_sql,
+            "ex": 0,
+        }
 
     ex = 1 if ex_match(agent_result, gold_result) else 0
     return {
@@ -216,22 +248,39 @@ def run_case(case: dict, bird_path: Path) -> dict:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="BIRD benchmark evaluation for Text2SQL Agent")
-    parser.add_argument("--bird-path", required=True, type=Path,
-                        help="Path to the BIRD dev directory (contains dev.json + dev_databases/)")
-    parser.add_argument("--n", type=int, default=50,
-                        help="Number of questions to evaluate (default: 50)")
-    parser.add_argument("--db", type=str, default=None,
-                        help="Restrict to one database ID, e.g. california_schools")
-    parser.add_argument("--difficulty", choices=["simple", "moderate", "challenging"],
-                        default=None, help="Filter by question difficulty")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed for sampling (default: 42)")
-    parser.add_argument("--delay", type=float, default=_DEFAULT_DELAY,
-                        help=f"Seconds between API calls (default: {_DEFAULT_DELAY})")
-    parser.add_argument("--output", type=Path, default=None,
-                        help="Save full results to this JSON file")
+    parser.add_argument(
+        "--bird-path",
+        required=True,
+        type=Path,
+        help="Path to the BIRD dev directory (contains dev.json + dev_databases/)",
+    )
+    parser.add_argument(
+        "--n", type=int, default=50, help="Number of questions to evaluate (default: 50)"
+    )
+    parser.add_argument(
+        "--db", type=str, default=None, help="Restrict to one database ID, e.g. california_schools"
+    )
+    parser.add_argument(
+        "--difficulty",
+        choices=["simple", "moderate", "challenging"],
+        default=None,
+        help="Filter by question difficulty",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for sampling (default: 42)"
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=_DEFAULT_DELAY,
+        help=f"Seconds between API calls (default: {_DEFAULT_DELAY})",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=None, help="Save full results to this JSON file"
+    )
     args = parser.parse_args()
 
     dev_json = args.bird_path / "dev.json"
@@ -269,9 +318,7 @@ def main():
 
     results = []
     ex_total = 0
-    diff_stats: dict[str, list] = {
-        "simple": [0, 0], "moderate": [0, 0], "challenging": [0, 0]
-    }
+    diff_stats: dict[str, list] = {"simple": [0, 0], "moderate": [0, 0], "challenging": [0, 0]}
     status_counts: dict[str, int] = {}
 
     for i, case in enumerate(cases):
@@ -312,7 +359,7 @@ def main():
 
     print(f"\n{sep}")
     print(f"  Execution Accuracy (EX) : {ex_total}/{total} = {ex_pct:.1f}%")
-    print(f"  Target (Week 5-6)       : 60.0%")
+    print("  Target (Week 5-6)       : 60.0%")
     print(f"  {'PASS' if ex_pct >= 60 else 'BELOW TARGET'}")
     print()
 
@@ -323,7 +370,9 @@ def main():
         for diff, (passed, count) in diff_stats.items():
             if count:
                 bar = "#" * int(passed / count * 20)
-                print(f"    {diff:<12}: {passed:>3}/{count:<3} = {passed/count*100:5.1f}%  [{bar:<20}]")
+                print(
+                    f"    {diff:<12}: {passed:>3}/{count:<3} = {passed/count*100:5.1f}%  [{bar:<20}]"
+                )
         print()
 
     # Breakdown by failure mode
@@ -337,10 +386,16 @@ def main():
     if args.output:
         payload = {
             "summary": {
-                "ex": ex_total, "total": total, "ex_pct": round(ex_pct, 1),
-                "db": args.db, "difficulty": args.difficulty, "n": args.n,
+                "ex": ex_total,
+                "total": total,
+                "ex_pct": round(ex_pct, 1),
+                "db": args.db,
+                "difficulty": args.difficulty,
+                "n": args.n,
             },
-            "by_difficulty": {k: {"passed": v[0], "total": v[1]} for k, v in diff_stats.items() if v[1]},
+            "by_difficulty": {
+                k: {"passed": v[0], "total": v[1]} for k, v in diff_stats.items() if v[1]
+            },
             "status_counts": status_counts,
             "results": results,
         }

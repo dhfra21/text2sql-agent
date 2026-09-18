@@ -1,8 +1,9 @@
 import os
 from typing import Optional
+
 import sqlalchemy
-from sqlalchemy import text
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -14,7 +15,16 @@ def _get_engine() -> sqlalchemy.engine.Engine:
     user = os.getenv("DB_USER")
     password = os.getenv("DB_PASSWORD")
 
-    missing = [k for k, v in {"DB_HOST": host, "DB_NAME": name, "DB_USER": user, "DB_PASSWORD": password}.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "DB_HOST": host,
+            "DB_NAME": name,
+            "DB_USER": user,
+            "DB_PASSWORD": password,
+        }.items()
+        if not v
+    ]
     if missing:
         raise EnvironmentError(f"Missing required environment variables: {', '.join(missing)}")
 
