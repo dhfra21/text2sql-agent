@@ -53,7 +53,7 @@ text2sql_agent/
 │   ├── schema.sql             ← demo database DDL
 │   └── seed.sql               ← sample data
 ├── frontend/
-│   └── app.py                 ← Streamlit UI (coming Week 5)
+│   └── app.py                 ← Streamlit chat UI (agent-driven)
 ├── eval/
 │   ├── benchmark.py           ← BIRD evaluation runner
 │   └── test_cases.json
