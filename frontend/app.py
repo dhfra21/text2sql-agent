@@ -96,6 +96,34 @@ async def _run_turn(runner, session_id: str, question: str) -> dict:
     return {"answer": answer, "sql": sql, "result": exec_result}
 
 
+def _render_model_badge(models):
+    """Right-hand badge showing which model(s) answered, flagging any fallback."""
+    from agent.litellm_compat import groq_models
+
+    if not models:
+        return
+    seen = list(dict.fromkeys(models))  # de-dupe, preserve order
+    primary = groq_models()[0]
+    fell_back = any(m != primary for m in seen)
+    if fell_back:
+        st.caption("🔀 fallback")
+    else:
+        st.caption("⚙️ model")
+    for m in seen:
+        tag = "" if m == primary else " ↩"
+        st.markdown(f"<small><code>{m}</code>{tag}</small>", unsafe_allow_html=True)
+
+
+def _render_assistant(content, sql, result, models):
+    """Render one assistant turn: answer + details on the left, model on the right."""
+    col_answer, col_model = st.columns([4, 1])
+    with col_answer:
+        st.markdown(content)
+        _render_details(sql, result)
+    with col_model:
+        _render_model_badge(models)
+
+
 def _render_details(sql, result):
     """Show the generated SQL and result table in a collapsible section."""
     if not sql and not result:
@@ -159,18 +187,22 @@ if "messages" not in st.session_state:
 # Replay history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
         if msg["role"] == "assistant":
-            _render_details(msg.get("sql"), msg.get("result"))
+            _render_assistant(msg["content"], msg.get("sql"), msg.get("result"), msg.get("models"))
+        else:
+            st.markdown(msg["content"])
 
 # New question
 question = st.chat_input("Ask a question about the data…")
 if question:
+    from agent.litellm_compat import models_used, reset_models_used
+
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
 
     with st.chat_message("assistant"):
+        reset_models_used()
         with st.spinner("Thinking…"):
             try:
                 runner = _get_runner()
@@ -178,11 +210,17 @@ if question:
                 turn = asyncio.run(_run_turn(runner, session_id, question))
             except Exception as exc:  # noqa: BLE001
                 turn = {"answer": f"⚠️ Something went wrong: {exc}", "sql": None, "result": None}
+        turn_models = models_used()
 
         answer = turn["answer"] or "_(no answer returned)_"
-        st.markdown(answer)
-        _render_details(turn["sql"], turn["result"])
+        _render_assistant(answer, turn["sql"], turn["result"], turn_models)
 
     st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sql": turn["sql"], "result": turn["result"]}
+        {
+            "role": "assistant",
+            "content": answer,
+            "sql": turn["sql"],
+            "result": turn["result"],
+            "models": turn_models,
+        }
     )

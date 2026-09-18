@@ -13,8 +13,10 @@ from agent.tools.sql_validator import validate_sql
 # Groq model used by the orchestrating agent. Override with GROQ_MODEL in .env.
 _GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
-# Retry up to 3 times on rate-limit errors, waiting up to 10 s between attempts
-litellm.num_retries = 3
+# Keep litellm's own same-model retries low: our GroqReasoningClient handles
+# resilience by failing over across models and retrying the chain, so we don't
+# want litellm to also burn time retrying an already rate-limited model.
+litellm.num_retries = 1
 litellm.retry_after = 5
 
 _prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")

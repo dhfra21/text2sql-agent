@@ -5,7 +5,7 @@ import certifi
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError
 
-from agent.litellm_compat import groq_models
+from agent.litellm_compat import groq_models, record_model
 
 load_dotenv()
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
@@ -107,6 +107,7 @@ def generate_sql(question: str, schema: dict | None = None) -> str | dict:
                             else {}
                         ),
                     )
+                    record_model(model)
                     break
                 except RateLimitError:
                     continue

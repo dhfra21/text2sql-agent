@@ -11,6 +11,9 @@ from agent.litellm_compat import (
     _is_failover_error,
     _strip_reasoning,
     groq_models,
+    models_used,
+    record_model,
+    reset_models_used,
 )
 
 
@@ -88,3 +91,37 @@ def test_client_does_not_fail_over_on_client_error(monkeypatch):
             pass
 
     assert calls == ["groq/openai/gpt-oss-120b"]  # no fallback on a client error
+
+
+def test_record_and_reset_models():
+    reset_models_used()
+    record_model("groq/openai/gpt-oss-120b")
+    record_model("qwen/qwen3.8-27b")
+    assert models_used() == ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+    reset_models_used()
+    assert models_used() == []
+
+
+def test_client_waits_and_retries_chain(monkeypatch):
+    monkeypatch.setenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    monkeypatch.setenv("GROQ_FALLBACK_MODELS", "openai/gpt-oss-20b")
+    monkeypatch.setenv("GROQ_RATE_LIMIT_WAIT", "0")  # don't actually sleep
+    monkeypatch.setenv("GROQ_MAX_ROUNDS", "2")
+    reset_models_used()
+    calls = []
+
+    async def fake_acompletion(self, model, messages, tools, **kwargs):
+        calls.append(model)
+        if len(calls) <= 2:  # every model limited in round 1
+            raise Exception("rate_limit reached")
+        return "OK"
+
+    with patch.object(LiteLLMClient, "acompletion", new=fake_acompletion):
+        client = GroqReasoningClient()
+        result = asyncio.run(
+            client.acompletion("groq/openai/gpt-oss-120b", [{"role": "user", "content": "x"}], [])
+        )
+
+    assert result == "OK"
+    assert len(calls) == 3  # 2 fail in round 1, 1st of round 2 succeeds
+    assert models_used() == ["openai/gpt-oss-120b"]

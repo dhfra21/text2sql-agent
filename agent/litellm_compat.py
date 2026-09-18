@@ -16,12 +16,57 @@ Configuration (env vars, also honoured via Streamlit secrets):
     GROQ_MODEL            primary model (default: openai/gpt-oss-120b)
     GROQ_FALLBACK_MODELS  comma-separated fallbacks tried in order
                           (default: openai/gpt-oss-20b,qwen/qwen3.8-27b)
+    GROQ_RATE_LIMIT_WAIT  seconds to wait before retrying the chain when every
+                          model is rate-limited (default: 12)
+    GROQ_MAX_ROUNDS       how many times to try the full model chain (default: 2)
 """
 
+import asyncio
 import os
+import time
 from typing import Any
 
 from google.adk.models.lite_llm import LiteLLMClient
+
+# ── Model-usage tracking (for the UI to show which model answered) ────────────
+
+# Records the models that successfully served requests since the last reset.
+# Best-effort and process-global — fine for a single-user Streamlit session.
+_MODELS_USED: list[str] = []
+
+
+def _bare(model: str) -> str:
+    return model[len("groq/") :] if model.startswith("groq/") else model
+
+
+def reset_models_used() -> None:
+    """Clear the record — call this at the start of a turn."""
+    _MODELS_USED.clear()
+
+
+def record_model(model: str) -> None:
+    """Record that ``model`` successfully served a request."""
+    _MODELS_USED.append(_bare(model))
+
+
+def models_used() -> list[str]:
+    """Return the models that served requests since the last reset, in order."""
+    return list(_MODELS_USED)
+
+
+def _wait_seconds() -> float:
+    try:
+        return float(os.getenv("GROQ_RATE_LIMIT_WAIT", "12"))
+    except ValueError:
+        return 12.0
+
+
+def _max_rounds() -> int:
+    try:
+        return max(1, int(os.getenv("GROQ_MAX_ROUNDS", "2")))
+    except ValueError:
+        return 2
+
 
 # ── Reasoning-field stripping ─────────────────────────────────────────────────
 
@@ -123,25 +168,39 @@ class GroqReasoningClient(LiteLLMClient):
     async def acompletion(self, model, messages, tools, **kwargs):
         messages = _strip_reasoning(messages)
         candidates = _candidates(model)
+        rounds = _max_rounds()
         last_exc: Exception | None = None
-        for i, candidate in enumerate(candidates):
-            try:
-                return await super().acompletion(candidate, messages, tools, **kwargs)
-            except Exception as exc:  # noqa: BLE001 — classify then re-raise
-                last_exc = exc
-                if i == len(candidates) - 1 or not _is_failover_error(exc):
-                    raise
+        for round_idx in range(rounds):
+            if round_idx > 0:
+                # Every model was rate-limited last round — wait for the
+                # per-minute window to clear, then retry the whole chain.
+                await asyncio.sleep(_wait_seconds())
+            for candidate in candidates:
+                try:
+                    result = await super().acompletion(candidate, messages, tools, **kwargs)
+                    record_model(candidate)
+                    return result
+                except Exception as exc:  # noqa: BLE001 — classify then re-raise
+                    last_exc = exc
+                    if not _is_failover_error(exc):
+                        raise
         raise last_exc  # pragma: no cover
 
     def completion(self, model, messages, tools, stream=False, **kwargs):
         messages = _strip_reasoning(messages)
         candidates = _candidates(model)
+        rounds = _max_rounds()
         last_exc: Exception | None = None
-        for i, candidate in enumerate(candidates):
-            try:
-                return super().completion(candidate, messages, tools, stream=stream, **kwargs)
-            except Exception as exc:  # noqa: BLE001 — classify then re-raise
-                last_exc = exc
-                if i == len(candidates) - 1 or not _is_failover_error(exc):
-                    raise
+        for round_idx in range(rounds):
+            if round_idx > 0:
+                time.sleep(_wait_seconds())
+            for candidate in candidates:
+                try:
+                    result = super().completion(candidate, messages, tools, stream=stream, **kwargs)
+                    record_model(candidate)
+                    return result
+                except Exception as exc:  # noqa: BLE001 — classify then re-raise
+                    last_exc = exc
+                    if not _is_failover_error(exc):
+                        raise
         raise last_exc  # pragma: no cover
