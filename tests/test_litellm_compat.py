@@ -125,3 +125,9 @@ def test_client_waits_and_retries_chain(monkeypatch):
     assert result == "OK"
     assert len(calls) == 3  # 2 fail in round 1, 1st of round 2 succeeds
     assert models_used() == ["openai/gpt-oss-120b"]
+
+
+def test_groq_models_single_when_fallbacks_empty(monkeypatch):
+    monkeypatch.setenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    monkeypatch.setenv("GROQ_FALLBACK_MODELS", "")
+    assert groq_models() == ["openai/gpt-oss-120b"]

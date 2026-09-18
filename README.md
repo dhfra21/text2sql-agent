@@ -201,6 +201,21 @@ python eval/bird_benchmark.py --bird-path ../dev_20240627 --n 50 --output eval/b
 | `--seed` | 42 | Random seed for reproducible sampling |
 | `--delay` | 3 | Seconds between Groq API calls (free-tier rate limit) |
 | `--output` | none | Save detailed results to a JSON file |
+| `--model` | none | **Pin one model and disable fallback** — required for a reproducible, attributable score (see below) |
+| `--rate-retries` | 6 | With `--model`: times to wait out a rate limit and retry the same model before giving up on a question |
+
+**Single-model benchmarking (important)**
+
+The agent normally falls over between models (`GROQ_FALLBACK_MODELS`) for reliability. That is great for the live app but **wrong for a benchmark** — if different questions are answered by different models, the score is neither reproducible nor attributable to one model.
+
+For any number you report, pin a single model with `--model`. Rate limits are then *waited out on the same model* instead of switching, so every question is answered by that one model:
+
+```bash
+python eval/bird_benchmark.py --bird-path ../dev_20240627 --n 50 \
+    --model openai/gpt-oss-120b --output eval/bird_results.json
+```
+
+The run prints a **"Models used"** breakdown; a single entry confirms consistency, and a warning is shown if more than one model served the run.
 
 **Expected output**
 

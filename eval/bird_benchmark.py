@@ -26,6 +26,7 @@ Usage examples:
 
 import argparse
 import json
+import os
 import random
 import sqlite3
 import sys
@@ -35,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from agent.litellm_compat import models_used, reset_models_used  # noqa: E402
 from agent.tools.sql_generator import generate_sql  # noqa: E402
 from agent.tools.sql_validator import validate_sql  # noqa: E402
 
@@ -192,8 +194,11 @@ def run_case(case: dict, bird_path: Path) -> dict:
         augmented += f"\nHint: {evidence}"
     augmented += "\n[Generate SQLite SQL. Use backticks to quote column names that contain spaces or special characters.]"
 
-    # Agent pipeline: generate → validate → execute
+    # Agent pipeline: generate → validate → execute.
+    # Track which model actually served this question, to verify consistency.
+    reset_models_used()
     agent_sql = generate_sql(augmented, schema)
+    model_used = "|".join(dict.fromkeys(models_used())) or "unknown"
 
     base = {
         "id": qid,
@@ -201,6 +206,7 @@ def run_case(case: dict, bird_path: Path) -> dict:
         "question": question,
         "difficulty": difficulty,
         "gold_sql": gold_sql,
+        "model": model_used,
     }
 
     if isinstance(agent_sql, dict) and "error" in agent_sql:
@@ -281,7 +287,30 @@ def main():
     parser.add_argument(
         "--output", type=Path, default=None, help="Save full results to this JSON file"
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Pin a single Groq model and DISABLE fallback, for a reproducible, "
+        "attributable score (e.g. openai/gpt-oss-120b). Rate limits are waited out "
+        "on the same model instead of switching. Recommended for reporting.",
+    )
+    parser.add_argument(
+        "--rate-retries",
+        type=int,
+        default=6,
+        help="With --model: how many times to wait out a rate limit and retry the "
+        "same model before giving up on a question (default: 6)",
+    )
     args = parser.parse_args()
+
+    # Pin a single model for a consistent benchmark: set the model, clear the
+    # fallback chain, and allow enough retry rounds that a rate limit is waited
+    # out rather than scored as a failure. Must happen before generate_sql runs.
+    if args.model:
+        os.environ["GROQ_MODEL"] = args.model
+        os.environ["GROQ_FALLBACK_MODELS"] = ""
+        os.environ["GROQ_MAX_ROUNDS"] = str(max(1, args.rate_retries))
 
     dev_json = args.bird_path / "dev.json"
     if not dev_json.exists():
@@ -314,12 +343,18 @@ def main():
     if args.difficulty:
         print(f"  Difficulty: {args.difficulty}")
     print(f"  API delay : {args.delay}s between calls")
+    if args.model:
+        print(f"  Model     : {args.model}  (pinned — fallback disabled)")
+    else:
+        print("  Model     : fallback chain (NOT single-model — see --model for a")
+        print("              reproducible, attributable score)")
     print()
 
     results = []
     ex_total = 0
     diff_stats: dict[str, list] = {"simple": [0, 0], "moderate": [0, 0], "challenging": [0, 0]}
     status_counts: dict[str, int] = {}
+    model_counts: dict[str, int] = {}
 
     for i, case in enumerate(cases):
         if i > 0:
@@ -336,6 +371,8 @@ def main():
 
         status = r.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
+
+        model_counts[r.get("model", "unknown")] = model_counts.get(r.get("model", "unknown"), 0) + 1
 
         icon = "PASS" if r["ex"] else "FAIL"
         db_label = f"{r['db_id']:<22}"
@@ -379,6 +416,14 @@ def main():
     print("  Status breakdown:")
     for status, count in sorted(status_counts.items(), key=lambda x: -x[1]):
         print(f"    {status:<20}: {count}")
+    print()
+
+    # Which model(s) actually answered — a single entry means a consistent run.
+    print("  Models used:")
+    for model, count in sorted(model_counts.items(), key=lambda x: -x[1]):
+        print(f"    {model:<28}: {count}")
+    if len([m for m in model_counts if m != "unknown"]) > 1:
+        print("    ⚠ multiple models used — not a single-model score; re-run with --model")
 
     print(f"{sep}\n")
 
@@ -392,11 +437,14 @@ def main():
                 "db": args.db,
                 "difficulty": args.difficulty,
                 "n": args.n,
+                "model": args.model,
+                "single_model": bool(args.model),
             },
             "by_difficulty": {
                 k: {"passed": v[0], "total": v[1]} for k, v in diff_stats.items() if v[1]
             },
             "status_counts": status_counts,
+            "model_counts": model_counts,
             "results": results,
         }
         with open(args.output, "w", encoding="utf-8") as f:

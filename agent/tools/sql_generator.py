@@ -5,7 +5,7 @@ import certifi
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError
 
-from agent.litellm_compat import groq_models, record_model
+from agent.litellm_compat import _max_rounds, groq_models, record_model
 
 load_dotenv()
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
@@ -91,7 +91,7 @@ def generate_sql(question: str, schema: dict | None = None) -> str | dict:
         # model immediately, and only back off + retry once every model is limited.
         models = groq_models()
         response = None
-        for round_idx in range(2):
+        for round_idx in range(_max_rounds()):
             if round_idx > 0:
                 time.sleep(_rate_limit_wait())
             for model in models:
