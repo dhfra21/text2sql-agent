@@ -226,6 +226,45 @@ Result sets are compared as **deduplicated, order-independent sets** — matchin
 
 ---
 
+## Deploy (free)
+
+Deploy the chat frontend for free on **Streamlit Community Cloud**, backed by a free
+**Neon** serverless Postgres. Because `frontend/app.py` imports and runs the full ADK
+`root_agent`, deploying the Streamlit app deploys the whole agent — no separate service
+needed.
+
+### 1. Create a free Postgres on Neon
+
+1. Sign up at [neon.tech](https://neon.tech) and create a project (choose a region near you).
+2. In the Neon SQL editor, run the contents of [`db/schema.sql`](db/schema.sql) then
+   [`db/seed.sql`](db/seed.sql) to create and populate the demo tables.
+3. From **Connection Details**, note the host, database, user, and password.
+
+### 2. Deploy on Streamlit Community Cloud
+
+1. Push this repo to GitHub (already done if you cloned it).
+2. Go to [share.streamlit.io](https://share.streamlit.io), **New app**, and point it at:
+   - Repository: your fork
+   - Branch: `master`
+   - Main file path: `frontend/app.py`
+   - Python version: **3.11** or newer
+3. Open **Advanced settings → Secrets** and paste the keys from
+   [`.streamlit/secrets.toml.example`](.streamlit/secrets.toml.example), filling in your
+   Groq key and Neon connection details. **`DB_SSLMODE` must be `require`** for Neon.
+4. Deploy. The app installs `requirements.txt` and starts automatically.
+
+The app reads its configuration from `st.secrets` and mirrors it into the environment, so
+the same code runs locally (via `.env`) and in the cloud (via Streamlit secrets) unchanged.
+
+### Alternative: Cloud Run (ADK web server)
+
+The included [`Dockerfile`](Dockerfile) runs `adk web` and is Cloud Run–ready. Cloud Run's
+always-free tier is generous, but Cloud SQL is **not** free — pair Cloud Run with the same
+free **Neon** database instead, and set `DB_SSLMODE=require` plus the `DB_*` and `GROQ_*`
+values as Cloud Run environment variables / secrets.
+
+---
+
 ## Milestones
 
 | Weeks | Milestone |

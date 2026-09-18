@@ -29,7 +29,13 @@ def _get_engine() -> sqlalchemy.engine.Engine:
         raise EnvironmentError(f"Missing required environment variables: {', '.join(missing)}")
 
     url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
-    return sqlalchemy.create_engine(url)
+    connect_args = {}
+    # Managed Postgres (Neon, Supabase, Cloud SQL) requires SSL. Set DB_SSLMODE=require
+    # in the cloud; leave it unset for local development.
+    sslmode = os.getenv("DB_SSLMODE")
+    if sslmode:
+        connect_args["sslmode"] = sslmode
+    return sqlalchemy.create_engine(url, connect_args=connect_args)
 
 
 def get_schema(table_names: Optional[list[str]] = None) -> dict:

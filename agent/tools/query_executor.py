@@ -33,10 +33,16 @@ def _get_engine() -> sqlalchemy.engine.Engine:
     # default_transaction_read_only makes every statement on this connection read-only
     # at the server level, regardless of the role's privileges — a second safety net
     # behind validate_sql().
+    connect_args = {"options": "-c default_transaction_read_only=on"}
+    # Managed Postgres (Neon, Supabase, Cloud SQL) requires SSL. Set DB_SSLMODE=require
+    # in the cloud; leave it unset for local development.
+    sslmode = os.getenv("DB_SSLMODE")
+    if sslmode:
+        connect_args["sslmode"] = sslmode
     return sqlalchemy.create_engine(
         url,
         execution_options={"isolation_level": "AUTOCOMMIT"},
-        connect_args={"options": "-c default_transaction_read_only=on"},
+        connect_args=connect_args,
     )
 
 

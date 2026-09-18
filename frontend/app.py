@@ -24,6 +24,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 load_dotenv()
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
+# On Streamlit Community Cloud there is no .env — configuration is provided via
+# st.secrets. Mirror those values into the environment so the agent tools
+# (which read os.getenv) pick them up. Must run before agent.agent is imported.
+try:
+    for _k, _v in st.secrets.items():
+        os.environ.setdefault(_k, str(_v))
+except Exception:
+    pass
+
 st.set_page_config(page_title="Text2SQL Agent", page_icon="🔍", layout="centered")
 
 APP_NAME = "text2sql_frontend"
