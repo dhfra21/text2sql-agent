@@ -5,11 +5,19 @@ import certifi
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError
 
+from agent.litellm_compat import groq_models
+
 load_dotenv()
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
-# Groq model used for SQL generation. Override with GROQ_MODEL in .env.
-_GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+
+def _rate_limit_wait() -> float:
+    """Seconds to wait after every configured model has been rate-limited."""
+    try:
+        return float(os.getenv("GROQ_RATE_LIMIT_WAIT", "12"))
+    except ValueError:
+        return 12.0
+
 
 _PROMPT_TEMPLATE = """You are a SQL expert. Given the database schema below, write a single SQL SELECT query that answers the user's question.
 
@@ -78,28 +86,37 @@ def generate_sql(question: str, schema: dict | None = None) -> str | dict:
         )
 
         client = Groq(api_key=api_key)
-        max_attempts = 5
-        for attempt in range(max_attempts):
-            try:
-                response = client.chat.completions.create(
-                    model=_GROQ_MODEL,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0,
-                    reasoning_effort="medium",
-                )
-                break
-            except RateLimitError as e:
-                if attempt == max_attempts - 1:
-                    raise
-                # Honour the Retry-After header if present, else exponential backoff
-                wait = 10 * (2**attempt)  # 10s, 20s, 40s, 80s
+        messages = [{"role": "user", "content": prompt}]
+        # Try each configured model in order; on rate-limit, fail over to the next
+        # model immediately, and only back off + retry once every model is limited.
+        models = groq_models()
+        response = None
+        for round_idx in range(2):
+            if round_idx > 0:
+                time.sleep(_rate_limit_wait())
+            for model in models:
                 try:
-                    retry_after = e.response.headers.get("retry-after")
-                    if retry_after:
-                        wait = float(retry_after) + 1
-                except Exception:
-                    pass
-                time.sleep(wait)
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0,
+                        # reasoning_effort is only valid for gpt-oss reasoning models
+                        **(
+                            {"reasoning_effort": "medium"}
+                            if model.startswith("openai/gpt-oss")
+                            else {}
+                        ),
+                    )
+                    break
+                except RateLimitError:
+                    continue
+            if response is not None:
+                break
+        if response is None:
+            raise RuntimeError(
+                "All Groq models are rate-limited — try again shortly or add more "
+                "fallbacks via GROQ_FALLBACK_MODELS."
+            )
         sql = response.choices[0].message.content.strip()
 
         # Strip accidental markdown fences

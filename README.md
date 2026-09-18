@@ -27,7 +27,7 @@ User question (natural language)
 | Layer | Technology |
 |---|---|
 | Agent Framework | Google ADK (Python) |
-| LLM | `openai/gpt-oss-120b` via Groq + LiteLLM (configurable with `GROQ_MODEL`) |
+| LLM | `openai/gpt-oss-120b` via Groq + LiteLLM (set `GROQ_MODEL`; auto-fails over to `GROQ_FALLBACK_MODELS` on rate limits) |
 | Database | PostgreSQL |
 | DB Driver | psycopg2 / SQLAlchemy |
 | Frontend | Streamlit (Weeks 5–6) |
@@ -89,6 +89,7 @@ Required variables:
 # LLM
 GROQ_API_KEY=...                  # free at console.groq.com
 GROQ_MODEL=openai/gpt-oss-120b    # optional, this is the default
+GROQ_FALLBACK_MODELS=openai/gpt-oss-20b,qwen/qwen3.8-27b  # optional, tried on rate-limit/errors
 
 # PostgreSQL
 DB_HOST=localhost
